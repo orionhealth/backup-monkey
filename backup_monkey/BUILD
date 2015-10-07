@@ -6,7 +6,6 @@ python_library(
 python_library(
   name='lib',
   sources=globs('*.py'),
-  #sources=['cli.py'],
   dependencies=[':3rdparty']
 )
 
