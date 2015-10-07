@@ -16,9 +16,9 @@ import argparse
 import logging
 import sys
 
-from backup_monkey.core import BackupMonkey, Logging
-from backup_monkey import __version__
-from backup_monkey.exceptions import BackupMonkeyException
+from core import BackupMonkey, Logging
+from __init__ import __version__
+from exception import BackupMonkeyException
 
 from boto.utils import get_instance_metadata
 

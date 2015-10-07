@@ -16,7 +16,7 @@ import logging
 from boto.exception import NoAuthHandlerFound
 from boto import ec2
 
-from backup_monkey.exceptions import BackupMonkeyException
+from exception import BackupMonkeyException
 
 __all__ = ('BackupMonkey', 'Logging')
 log = logging.getLogger(__name__)
@@ -63,8 +63,9 @@ class BackupMonkey(object):
         return ret
 
     def get_filters(self):
-        filters = dict([t.split(':') for t in self._tags])
+        filters = None
         try:
+            filters = dict([t.split(':') for t in self._tags])
             for f in filters.keys():
                 try:
                     filters[f] = eval(filters[f])

@@ -14,7 +14,7 @@
 
 from unittest import TestCase
 
-from backup_monkey.exceptions import * 
+from backup_monkey.exception import * 
 
 class ExceptionTests(TestCase):
     def test_new_exception(self):
