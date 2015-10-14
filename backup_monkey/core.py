@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import sys
 
 from boto.exception import NoAuthHandlerFound
 from boto import ec2
@@ -161,11 +162,11 @@ class Logging(object):
         
         # Configure our logging output
         if verbosity >= 2:
-            logging.basicConfig(level=logging.DEBUG, format=self._log_detailed_format, datefmt='%F %T')
+            logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format=self._log_detailed_format, datefmt='%F %T')
         elif verbosity >= 1:
-            logging.basicConfig(level=logging.INFO, format=self._log_detailed_format, datefmt='%F %T')
+            logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=self._log_detailed_format, datefmt='%F %T')
         else:
-            logging.basicConfig(level=logging.INFO, format=self._log_simple_format, datefmt='%F %T')
+            logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=self._log_simple_format, datefmt='%F %T')
     
         # Configure Boto's logging output
         if verbosity >= 4:
