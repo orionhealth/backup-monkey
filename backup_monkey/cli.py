@@ -63,7 +63,7 @@ def run():
     if args.reverse_tags and not args.tags:
         parser.error('The --tags parameter is required if you specify --reverse-tags (doing a blacklist filter)')
 
-    Logging().configure(args.verbose)
+    Logging().configure(args.verbose, __name__)
 
     log.debug("CLI parse args: %s", args)
 

@@ -149,24 +149,46 @@ class BackupMonkey(object):
                 log.info(' Deleting %s: %s', snapshot.id, snapshot.description)
                 snapshot.delete()
         return True
+    
+class ErrorFilter(object):
+  def filter(self, record):
+    return record.levelno >= logging.ERROR
 
-
+class WarningFilter(object):
+  def filter(self, record):
+    return record.levelno <= logging.WARNING
 
 class Logging(object):
     # Logging formats
     _log_simple_format = '%(asctime)s [%(levelname)s] %(message)s'
     _log_detailed_format = '%(asctime)s [%(levelname)s] [%(name)s(%(lineno)s):%(funcName)s] %(message)s'
+    _log_date_format = '%F %T'
+
+    def getHandler(self, stream, format_, handler_filter):
+        _handler = logging.StreamHandler(stream)
+        _handler.setFormatter(logging.Formatter(format_, self._log_date_format))
+        if handler_filter:
+            _handler.addFilter(handler_filter)
+        return _handler
     
-    def configure(self, verbosity = None):
+    def configure(self, verbosity = None, module = __name__):
         ''' Configure the logging format and verbosity '''
-        
+        _log = logging.getLogger(module)
         # Configure our logging output
         if verbosity >= 2:
-            logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format=self._log_detailed_format, datefmt='%F %T')
+            _log.addHandler(self.getHandler(stream=sys.stdout, format_=self._log_detailed_format, handler_filter=WarningFilter()))
+            _log.addHandler(self.getHandler(stream=sys.stderr, format_=self._log_detailed_format, handler_filter=ErrorFilter()))
+            _log.setLevel(level=logging.DEBUG)
         elif verbosity >= 1:
-            logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=self._log_detailed_format, datefmt='%F %T')
+            _log.addHandler(self.getHandler(stream=sys.stdout, format_=self._log_detailed_format, handler_filter=WarningFilter()))
+            _log.addHandler(self.getHandler(stream=sys.stderr, format_=self._log_detailed_format, handler_filter=ErrorFilter()))
+            _log.setLevel(level=logging.INFO)
         else:
-            logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=self._log_simple_format, datefmt='%F %T')
+            handler = self.getHandler(stream=sys.stdout, format_=self._log_simple_format , handler_filter=WarningFilter())
+            _log.addHandler(handler)
+            error_handler = self.getHandler(stream=sys.stderr, format_=self._log_simple_format, handler_filter=ErrorFilter())
+            _log.addHandler(error_handler)
+            _log.setLevel(level=logging.INFO)
     
         # Configure Boto's logging output
         if verbosity >= 4:
