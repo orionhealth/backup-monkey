@@ -171,9 +171,14 @@ class Logging(object):
             _handler.addFilter(handler_filter)
         return _handler
     
+    def clearLoggingHandlers(self, logger):
+        while len(logger.handlers) > 0:
+            logger.removeHandler(logger.handlers[0])
+
     def configure(self, verbosity = None, module = __name__):
         ''' Configure the logging format and verbosity '''
         _log = logging.getLogger(module)
+        self.clearLoggingHandlers(_log)
         # Configure our logging output
         if verbosity >= 2:
             _log.addHandler(self.getHandler(stream=sys.stdout, format_=self._log_detailed_format, handler_filter=WarningFilter()))
@@ -189,12 +194,12 @@ class Logging(object):
             error_handler = self.getHandler(stream=sys.stderr, format_=self._log_simple_format, handler_filter=ErrorFilter())
             _log.addHandler(error_handler)
             _log.setLevel(level=logging.INFO)
-    
+
         # Configure Boto's logging output
         if verbosity >= 4:
             logging.getLogger('boto').setLevel(logging.DEBUG)
         elif verbosity >= 3:
             logging.getLogger('boto').setLevel(logging.INFO)
         else:
-            logging.getLogger('boto').setLevel(logging.CRITICAL)    
-    
+            logging.getLogger('boto').setLevel(logging.CRITICAL)
+
