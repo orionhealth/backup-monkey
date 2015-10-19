@@ -189,10 +189,8 @@ class Logging(object):
             _log.addHandler(self.getHandler(stream=sys.stderr, format_=self._log_detailed_format, handler_filter=ErrorFilter()))
             _log.setLevel(level=logging.INFO)
         else:
-            handler = self.getHandler(stream=sys.stdout, format_=self._log_simple_format , handler_filter=WarningFilter())
-            _log.addHandler(handler)
-            error_handler = self.getHandler(stream=sys.stderr, format_=self._log_simple_format, handler_filter=ErrorFilter())
-            _log.addHandler(error_handler)
+            _log.addHandler(self.getHandler(stream=sys.stdout, format_=self._log_simple_format , handler_filter=WarningFilter()))
+            _log.addHandler(self.getHandler(stream=sys.stderr, format_=self._log_simple_format, handler_filter=ErrorFilter()))
             _log.setLevel(level=logging.INFO)
 
         # Configure Boto's logging output
