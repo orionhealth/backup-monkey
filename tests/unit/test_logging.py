@@ -76,11 +76,15 @@ class LoggingTest(TestCase):
         assert(self.stream_contains(mock_stdout, "%s\[WARNING\] This is a Warning Message" % self.log_preamble))
 
         assert(self.stream_does_not_contain(mock_stdout, "This is a Debug Message"))
+        assert(self.stream_does_not_contain(mock_stdout, "This is a Error Message"))
+        assert(self.stream_does_not_contain(mock_stdout, "This is a Critical Message"))
 
         assert(self.stream_contains(mock_stderr, "%s\[CRITICAL\] This is a Critical Message" % self.log_preamble))
         assert(self.stream_contains(mock_stderr, "%s\[ERROR\] This is an Error Message" % self.log_preamble))
 
         assert(self.stream_does_not_contain(mock_stderr, "This is a Debug Message"))
+        assert(self.stream_does_not_contain(mock_stderr, "This is an Info Message"))
+        assert(self.stream_does_not_contain(mock_stderr, "This is a Warning Message"))
 
     def test_level_1(self):
         # Expectation: Stack info in the error messages with no debug messages
@@ -89,11 +93,15 @@ class LoggingTest(TestCase):
         assert(self.stream_contains(mock_stdout, "%s\[WARNING\]%sThis is a Warning Message" % (self.log_preamble, self.detailed_log_preamble)))
 
         assert(self.stream_does_not_contain(mock_stdout, "This is a Debug Message"))
+        assert(self.stream_does_not_contain(mock_stdout, "This is a Error Message"))
+        assert(self.stream_does_not_contain(mock_stdout, "This is a Critical Message"))
 
         assert(self.stream_contains(mock_stderr, "%s\[CRITICAL\]%sThis is a Critical Message" % (self.log_preamble, self.detailed_log_preamble)))
         assert(self.stream_contains(mock_stderr, "%s\[ERROR\]%sThis is an Error Message" % (self.log_preamble, self.detailed_log_preamble)))
 
         assert(self.stream_does_not_contain(mock_stderr, "This is a Debug Message"))
+        assert(self.stream_does_not_contain(mock_stderr, "This is an Info Message"))
+        assert(self.stream_does_not_contain(mock_stderr, "This is a Warning Message"))
 
     def test_level_2(self):
         # Expectation: Stack info in the error messages with debug messages in stdout
@@ -102,8 +110,13 @@ class LoggingTest(TestCase):
         assert(self.stream_contains(mock_stdout, "%s\[WARNING\]%sThis is a Warning Message" % (self.log_preamble, self.detailed_log_preamble)))
         assert(self.stream_contains(mock_stdout, "%s\[DEBUG\]%sThis is a Debug Message" % (self.log_preamble, self.detailed_log_preamble)))
 
+        assert(self.stream_does_not_contain(mock_stdout, "This is a Error Message"))
+        assert(self.stream_does_not_contain(mock_stdout, "This is a Critical Message"))
+
         assert(self.stream_contains(mock_stderr, "%s\[CRITICAL\]%sThis is a Critical Message" % (self.log_preamble, self.detailed_log_preamble)))
         assert(self.stream_contains(mock_stderr, "%s\[ERROR\]%sThis is an Error Message" % (self.log_preamble, self.detailed_log_preamble)))
 
         assert(self.stream_does_not_contain(mock_stderr, "This is a Debug Message"))
+        assert(self.stream_does_not_contain(mock_stderr, "This is an Info Message"))
+        assert(self.stream_does_not_contain(mock_stderr, "This is a Warning Message"))
 
