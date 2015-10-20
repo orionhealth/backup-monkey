@@ -23,7 +23,8 @@ __all__ = ('BackupMonkey', 'Logging')
 log = logging.getLogger(__name__)
 
 class BackupMonkey(object):
-    def __init__(self, region, max_snapshots_per_volume, tags, reverse_tags, cross_account_number, cross_account_role):
+    def __init__(self, region, max_snapshots_per_volume, tags, reverse_tags, cross_account_number, cross_account_role, verbose):
+        Logging().configure(verbose)
         self._region = region
         self._prefix = 'BACKUP_MONKEY'
         self._snapshots_per_volume = max_snapshots_per_volume

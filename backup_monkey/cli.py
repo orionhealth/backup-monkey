@@ -82,7 +82,7 @@ def run():
         log.debug("Running in region: %s", region)
 
     try:
-        monkey = BackupMonkey(region, args.max_snapshots_per_volume, args.tags, args.reverse_tags, args.cross_account_number, args.cross_account_role)
+        monkey = BackupMonkey(region, args.max_snapshots_per_volume, args.tags, args.reverse_tags, args.cross_account_number, args.cross_account_role, args.verbose)
         
         if not args.remove_only:
             monkey.snapshot_volumes()
