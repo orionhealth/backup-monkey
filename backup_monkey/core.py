@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import sys
 
 from boto.exception import NoAuthHandlerFound
 from boto import ec2
@@ -22,7 +23,8 @@ __all__ = ('BackupMonkey', 'Logging')
 log = logging.getLogger(__name__)
 
 class BackupMonkey(object):
-    def __init__(self, region, max_snapshots_per_volume, tags, reverse_tags, cross_account_number, cross_account_role):
+    def __init__(self, region, max_snapshots_per_volume, tags, reverse_tags, cross_account_number, cross_account_role, verbose):
+        Logging().configure(verbose)
         self._region = region
         self._prefix = 'BACKUP_MONKEY'
         self._snapshots_per_volume = max_snapshots_per_volume
@@ -148,30 +150,55 @@ class BackupMonkey(object):
                 log.info(' Deleting %s: %s', snapshot.id, snapshot.description)
                 snapshot.delete()
         return True
+    
+class ErrorFilter(object):
+  def filter(self, record):
+    return record.levelno >= logging.ERROR
 
-
+class WarningFilter(object):
+  def filter(self, record):
+    return record.levelno <= logging.WARNING
 
 class Logging(object):
     # Logging formats
     _log_simple_format = '%(asctime)s [%(levelname)s] %(message)s'
     _log_detailed_format = '%(asctime)s [%(levelname)s] [%(name)s(%(lineno)s):%(funcName)s] %(message)s'
+    _log_date_format = '%F %T'
+
+    def getHandler(self, stream, format_, handler_filter):
+        _handler = logging.StreamHandler(stream)
+        _handler.setFormatter(logging.Formatter(format_, self._log_date_format))
+        if handler_filter:
+            _handler.addFilter(handler_filter)
+        return _handler
     
-    def configure(self, verbosity = None):
+    def clearLoggingHandlers(self, logger):
+        while len(logger.handlers) > 0:
+            logger.removeHandler(logger.handlers[0])
+
+    def configure(self, verbosity = None, module = __name__):
         ''' Configure the logging format and verbosity '''
-        
+        _log = logging.getLogger(module)
+        self.clearLoggingHandlers(_log)
         # Configure our logging output
         if verbosity >= 2:
-            logging.basicConfig(level=logging.DEBUG, format=self._log_detailed_format, datefmt='%F %T')
+            _log.addHandler(self.getHandler(stream=sys.stdout, format_=self._log_detailed_format, handler_filter=WarningFilter()))
+            _log.addHandler(self.getHandler(stream=sys.stderr, format_=self._log_detailed_format, handler_filter=ErrorFilter()))
+            _log.setLevel(level=logging.DEBUG)
         elif verbosity >= 1:
-            logging.basicConfig(level=logging.INFO, format=self._log_detailed_format, datefmt='%F %T')
+            _log.addHandler(self.getHandler(stream=sys.stdout, format_=self._log_detailed_format, handler_filter=WarningFilter()))
+            _log.addHandler(self.getHandler(stream=sys.stderr, format_=self._log_detailed_format, handler_filter=ErrorFilter()))
+            _log.setLevel(level=logging.INFO)
         else:
-            logging.basicConfig(level=logging.INFO, format=self._log_simple_format, datefmt='%F %T')
-    
+            _log.addHandler(self.getHandler(stream=sys.stdout, format_=self._log_simple_format , handler_filter=WarningFilter()))
+            _log.addHandler(self.getHandler(stream=sys.stderr, format_=self._log_simple_format, handler_filter=ErrorFilter()))
+            _log.setLevel(level=logging.INFO)
+
         # Configure Boto's logging output
         if verbosity >= 4:
             logging.getLogger('boto').setLevel(logging.DEBUG)
         elif verbosity >= 3:
             logging.getLogger('boto').setLevel(logging.INFO)
         else:
-            logging.getLogger('boto').setLevel(logging.CRITICAL)    
-    
+            logging.getLogger('boto').setLevel(logging.CRITICAL)
+

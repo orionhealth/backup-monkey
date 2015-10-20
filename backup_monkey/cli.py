@@ -63,7 +63,7 @@ def run():
     if args.reverse_tags and not args.tags:
         parser.error('The --tags parameter is required if you specify --reverse-tags (doing a blacklist filter)')
 
-    Logging().configure(args.verbose)
+    Logging().configure(args.verbose, __name__)
 
     log.debug("CLI parse args: %s", args)
 
@@ -82,7 +82,7 @@ def run():
         log.debug("Running in region: %s", region)
 
     try:
-        monkey = BackupMonkey(region, args.max_snapshots_per_volume, args.tags, args.reverse_tags, args.cross_account_number, args.cross_account_role)
+        monkey = BackupMonkey(region, args.max_snapshots_per_volume, args.tags, args.reverse_tags, args.cross_account_number, args.cross_account_role, args.verbose)
         
         if not args.remove_only:
             monkey.snapshot_volumes()

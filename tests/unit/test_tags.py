@@ -55,7 +55,7 @@ class TagsTest(TestCase):
 
     @mock.patch('backup_monkey.core.BackupMonkey.get_connection', side_effect=mock_get_connection)
     def setUp(self, mock):
-        self.backup_monkey = BackupMonkey('us-west-2', 3, [], None, None, None)
+        self.backup_monkey = BackupMonkey('us-west-2', 3, [], None, None, None, 0)
 
     @mock.patch('backup_monkey.core.BackupMonkey.get_connection', side_effect=mock_get_connection)
     def test_instance(self, mock):
