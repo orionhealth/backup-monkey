@@ -69,9 +69,9 @@ class LoggingTest(TestCase):
                 return False
         return True
 
-    def test_level_0(self):
+    def test_verbosity_level_0(self):
         # Expectation: Simple error messages with no debug messages
-        self.log_events(0, 2, 2)
+        self.log_events(verbosity=0, stdout_count=2, stderr_count=2)
         assert(self.stream_contains(mock_stdout, "%s\[INFO\] This is an Info Message" % self.log_preamble))
         assert(self.stream_contains(mock_stdout, "%s\[WARNING\] This is a Warning Message" % self.log_preamble))
 
@@ -86,9 +86,9 @@ class LoggingTest(TestCase):
         assert(self.stream_does_not_contain(mock_stderr, "This is an Info Message"))
         assert(self.stream_does_not_contain(mock_stderr, "This is a Warning Message"))
 
-    def test_level_1(self):
+    def test_verbosity_level_1(self):
         # Expectation: Stack info in the error messages with no debug messages
-        self.log_events(1, 2, 2)
+        self.log_events(verbosity=1, stdout_count=2, stderr_count=2)
         assert(self.stream_contains(mock_stdout, "%s\[INFO\]%sThis is an Info Message" % (self.log_preamble, self.detailed_log_preamble)))
         assert(self.stream_contains(mock_stdout, "%s\[WARNING\]%sThis is a Warning Message" % (self.log_preamble, self.detailed_log_preamble)))
 
@@ -103,9 +103,9 @@ class LoggingTest(TestCase):
         assert(self.stream_does_not_contain(mock_stderr, "This is an Info Message"))
         assert(self.stream_does_not_contain(mock_stderr, "This is a Warning Message"))
 
-    def test_level_2(self):
+    def test_verbosity_level_2(self):
         # Expectation: Stack info in the error messages with debug messages in stdout
-        self.log_events(2, 3, 2)
+        self.log_events(verbosity=2, stdout_count=3, stderr_count=2)
         assert(self.stream_contains(mock_stdout, "%s\[INFO\]%sThis is an Info Message" % (self.log_preamble, self.detailed_log_preamble)))
         assert(self.stream_contains(mock_stdout, "%s\[WARNING\]%sThis is a Warning Message" % (self.log_preamble, self.detailed_log_preamble)))
         assert(self.stream_contains(mock_stdout, "%s\[DEBUG\]%sThis is a Debug Message" % (self.log_preamble, self.detailed_log_preamble)))
