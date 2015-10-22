@@ -90,7 +90,7 @@ def run():
             monkey.remove_old_snapshots()
         
     except BackupMonkeyException as e:
-        _fail(e.message)
+        _fail(str(e))
     
     log.info('Backup Monkey completed successfully!')
     sys.exit(0)

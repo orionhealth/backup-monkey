@@ -14,3 +14,7 @@
 
 __author__ = 'Peter Sankauskas'
 __version__ = '1.0.0'
+
+from splunk_logging import SplunkLogging
+
+__all__ = ['SplunkLogging']

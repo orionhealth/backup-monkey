@@ -11,7 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from splunk_logging import SplunkLogging  
 
 class BackupMonkeyException(Exception):
-    ''' Base Backup Monkey Exception '''
-    pass
+  ''' Base Backup Monkey Exception '''
+
+  def __init__(self, *args, **kwargs):
+    kwargs['type'] = 'alarm'
+    kwargs['severity'] = 'critical'
+    SplunkLogging.write(**kwargs)
+    super(Exception, self).__init__(*args)
