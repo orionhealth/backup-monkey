@@ -11,10 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import logging
-import sys
+import logging, sys, os, re
 
-from boto.exception import NoAuthHandlerFound
+from boto.exception import NoAuthHandlerFound, BotoServerError
 from boto import ec2
 
 from exception import BackupMonkeyException
@@ -22,7 +21,11 @@ from exception import BackupMonkeyException
 __all__ = ('BackupMonkey', 'Logging')
 log = logging.getLogger(__name__)
 
+from splunk_logging import SplunkLogging  
+from status import BackupMonkeyStatus as _status
+
 class BackupMonkey(object):
+
     def __init__(self, region, max_snapshots_per_volume, tags, reverse_tags, cross_account_number, cross_account_role, verbose):
         Logging().configure(verbose)
         self._region = region
@@ -34,9 +37,21 @@ class BackupMonkey(object):
         self._cross_account_role = cross_account_role
         self._conn = self.get_connection()
 
+    def _info(self, **kwargs):
+        log.info('%s: %s' % (kwargs['subject'], kwargs['body']) if 'subject' in kwargs and 'body' in kwargs else kwargs['subject'] if 'subject' in kwargs else None)
+        kwargs['severity'] = kwargs['severity'] if 'severity' in kwargs else 'informational' 
+        kwargs['type'] = kwargs['type'] if 'type' in kwargs else 'event' 
+        kwargs['src_region'] = self._region
+        SplunkLogging.write(**kwargs)
+
     def get_connection(self):
         ret = None
         if self._cross_account_number and self._cross_account_role:
+            self._info(
+                subject=_status.parse_status('cross_account_connect', (self._cross_account_number, self._cross_account_role, self._region)), 
+                src_account=self._cross_account_number, 
+                src_role=self._cross_account_role,
+                category='connection')
             from boto.sts import STSConnection
             import boto
             try:
@@ -49,19 +64,29 @@ class BackupMonkey(object):
                     aws_secret_access_key=assumed_role.credentials.secret_key, 
                     security_token=assumed_role.credentials.session_token
                 )
-            except Exception,e:
-                print e
-                raise BackupMonkeyException('Cannot complete cross account access')
+            except BotoServerError, e:
+                raise BackupMonkeyException('%s: %s' % (_status.parse_status('cross_account_error'), e.message),
+                    subject=_status.parse_status('cross_account_error'),
+                    body=e.message,
+                    src_account=self._cross_account_number,
+                    src_role=self._cross_account_role,
+                    category='connection')
         else:
-            log.info("Connecting to region %s", self._region)
+            self._info(
+                subject=_status.parse_status('region_connect', self._region), 
+                category='connection')
             try:
                 ret = ec2.connect_to_region(self._region)
-            except NoAuthHandlerFound:
-                log.error('Could not connect to region %s' % self._region)
+            except NoAuthHandlerFound, e:
                 log.critical('No AWS credentials found. To configure Boto, please read: http://boto.readthedocs.org/en/latest/boto_config_tut.html')
-                raise BackupMonkeyException('No AWS credentials found')            
+                raise BackupMonkeyException('%s: %s' % (_status.parse_status('region_connect_error'), e.message),
+                    subject=_status.parse_status('region_connect_error'),
+                    body=e.message,
+                    category='connection')
         if not ret:
-            raise BackupMonkeyException('Could not connect to region `%s`. Check to make sure you are connecting to a valid region' % self._region)
+            raise BackupMonkeyException(_status.parse_status('region_connect_invalid', self._region),
+                subject=_status.parse_status('region_connect_invalid', self._region),
+                category='connection')
         return ret
 
     def get_filters(self):
@@ -73,15 +98,31 @@ class BackupMonkey(object):
                     filters[f] = eval(filters[f])
                 except Exception:
                     pass
-        except ValueError:
-            log.error('Invalid tag parameter')
-            raise BackupMonkeyException('Invalid tag parameter')
+        except ValueError, e:
+            raise BackupMonkeyException('%s: %s' % (_status.parse_status('tags_invalid'), str(e)),
+                subject=_status.parse_status('tags_invalid'),
+                body=str(e),
+                src_tags=' '.join(self._tags),
+                category='parameters')
         if not self._reverse_tags:
             for f in filters.keys():
                 filters['tag:%s' % f] = filters.pop(f)
         return filters
 
+    def get_all_volumes(self, **kwargs):
+        try:
+            return self._conn.get_all_volumes(**kwargs)
+        except BotoServerError, e:
+            raise BackupMonkeyException('%s: %s' % (_status.parse_status('volumes_fetch_error', self._region), e.message),
+                subject=_status.parse_status('volumes_fetch_error', self._region),
+                body=e.message,
+                category='volumes')
+
     def get_volumes_to_snapshot(self):
+        ''' Returns volumes to snapshot based on passed in tags '''
+        self._info(
+            subject=_status.parse_status('volumes_fetch', self._region), 
+            category='volumes')
         volumes = [] 
         if self._reverse_tags:
             filters = self.get_filters()
@@ -91,15 +132,15 @@ class BackupMonkey(object):
                     black_list = black_list + [(f, i) for i in filters[f]]
                 else:
                     black_list.append((f, filters[f]))
-            for v in self._conn.get_all_volumes():
+            for v in self.get_all_volumes():
                 if len(set(v.tags.items()) - set(black_list)) == len(set(v.tags.items())):
                     volumes.append(v) 
+            return volumes
         else:
             if self._tags:
-                return self._conn.get_all_volumes(filters=self.get_filters())
+                return self.get_all_volumes(filters=self.get_filters())
             else:
-                volumes = self._conn.get_all_volumes()
-        return volumes
+                return self.get_all_volumes()
     
     def snapshot_volumes(self):
         ''' Loops through all EBS volumes and creates snapshots of them '''
@@ -115,18 +156,43 @@ class BackupMonkey(object):
             if volume.attach_data.device:
                 description_parts.append(volume.attach_data.device)
             description = ' '.join(description_parts)
-            log.info('Creating snapshot of %s: %s', volume.id, description)
-            volume.create_snapshot(description)
+            self._info(subject=_status.parse_status('snapshot_create', (volume.id, description)), 
+                src_volume=volume.id,
+                src_tags=' '.join([':'.join(i) for i in volume.tags.items()]),
+                category='snapshots')
+            try:
+                snapshot = volume.create_snapshot(description)
+                if volume.tags:
+                    snapshot.add_tags(volume.tags)
+                self._info(subject=_status.parse_status('snapshot_create_success', (snapshot.id, volume.id)), 
+                    src_volume=volume.id,
+                    src_snapshot=snapshot.id,
+                    src_tags=' '.join([':'.join(i) for i in snapshot.tags.items()]),
+                    category='snapshots')
+            except BotoServerError, e:
+                raise BackupMonkeyException('%s: %s' % (_status.parse_status('snapshot_create_error', volume.id), e.message),
+                    subject=_status.parse_status('snapshot_create_error', volume.id),
+                    body=e.message,
+                    src_volume=volume.id,
+                    src_tags=' '.join([':'.join(i) for i in volume.tags.items()]),
+                    category='volumes')
         return True
 
 
     def remove_old_snapshots(self):
         ''' Loop through this account's snapshots, and remove the oldest ones
         where there are more snapshots per volume than required '''
-        
         log.info('Configured to keep %d snapshots per volume', self._snapshots_per_volume)
-        log.info('Getting list of EBS snapshots')
-        snapshots = self._conn.get_all_snapshots(owner='self')
+        self._info(
+            subject=_status.parse_status('snapshots_fetch', self._region),
+            category='snapshots')
+        try:
+            snapshots = self._conn.get_all_snapshots(owner='self')
+        except BotoServerError, e:
+            raise BackupMonkeyException('%s: %s' % (_status.parse_status('snapshot_fetch_error', self._region), e.message),
+                subject=_status.parse_status('snapshot_fetch_error', self._region),
+                body=e.message,
+                category='snapshots')
         log.info('Found %d snapshots', len(snapshots))
         vol_snap_map = {}
         for snapshot in snapshots:
@@ -147,8 +213,23 @@ class BackupMonkey(object):
 
             for i in range(self._snapshots_per_volume, num_snapshots):
                 snapshot = most_recent_snapshots[i]
-                log.info(' Deleting %s: %s', snapshot.id, snapshot.description)
-                snapshot.delete()
+                snapshot_id = snapshot.id
+                snapshot_description = snapshot.description
+                self._info(subject=_status.parse_status('snapshot_delete', (snapshot_id, snapshot_description)), 
+                    src_snapshot=snapshot_id,
+                    src_volume=volume_id,
+                    category='snapshots')
+                try:
+                    snapshot.delete()
+                    self._info(subject=_status.parse_status('snapshot_delete_success', (snapshot_id, snapshot_description)), 
+                        src_snapshot=snapshot_id,
+                        category='snapshots')
+                except BotoServerError, e:
+                    raise BackupMonkeyException('%s: %s' % (_status.parse_status('snapshot_delete_error', (snapshot_id, snapshot_description)), e.message),
+                        subject=_status.parse_status('snapshot_delete_error', (snapshot_id, snapshot_description)),
+                        body=e.message,
+                        src_snapshot=snapshot_id,
+                        category='snapshots')
         return True
     
 class ErrorFilter(object):

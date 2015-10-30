@@ -46,6 +46,7 @@ def readme():
         return f.read()
 
 setup(
+    setup_requires=['nose>=1.0'],
     name='backup_monkey',
     version=backup_monkey.__version__,
     description='A service that makes sure you have snapshots of all your EBS volumes',
