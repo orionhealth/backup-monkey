@@ -142,6 +142,9 @@ class BackupMonkey(object):
             else:
                 return self.get_all_volumes()
     
+    def remove_reserved_tags(self, tags):
+        return dict((key,value) for key, value in tags.iteritems() if not key.startswith('aws:'))
+        
     def snapshot_volumes(self):
         ''' Loops through all EBS volumes and creates snapshots of them '''
 
@@ -163,7 +166,7 @@ class BackupMonkey(object):
             try:
                 snapshot = volume.create_snapshot(description)
                 if volume.tags:
-                    snapshot.add_tags(volume.tags)
+                    snapshot.add_tags(self.remove_reserved_tags(volume.tags))
                 self._info(subject=_status.parse_status('snapshot_create_success', (snapshot.id, volume.id)), 
                     src_volume=volume.id,
                     src_snapshot=snapshot.id,
