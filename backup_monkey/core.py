@@ -173,14 +173,24 @@ class BackupMonkey(object):
                     src_tags=' '.join([':'.join(i) for i in snapshot.tags.items()]),
                     category='snapshots')
             except BotoServerError, e:
-                raise BackupMonkeyException('%s: %s' % (_status.parse_status('snapshot_create_error', volume.id), e.message),
-                    subject=_status.parse_status('snapshot_create_error', volume.id),
-                    body=e.message,
-                    src_volume=volume.id,
-                    src_tags=' '.join([':'.join(i) for i in volume.tags.items()]),
-                    category='volumes')
+                if e.code == 'SnapshotLimitExceeded':
+                    raise BackupMonkeyException('%s: %s' % (_status.parse_status('snapshot_create_error', volume.id), e.message),
+                        subject=_status.parse_status('snapshot_create_error', volume.id),
+                        body=e.message,
+                        src_volume=volume.id,
+                        src_tags=' '.join([':'.join(i) for i in self.remove_reserved_tags(volume.tags).items()]),
+                        category='snapshots')
+                else:
+                    log.error('%s: %s' % (_status.parse_status('snapshot_create_error', volume.id), e.message))
+                    SplunkLogging.write(
+                        subject=_status.parse_status('snapshot_create_error', volume.id),
+                        body=e.message,
+                        src_volume=volume.id,
+                        src_tags=' '.join([':'.join(i) for i in self.remove_reserved_tags(volume.tags).items()]),
+                        category='snapshots',
+                        type='alarm',
+                        severity='critical')
         return True
-
 
     def remove_old_snapshots(self):
         ''' Loop through this account's snapshots, and remove the oldest ones
@@ -228,11 +238,14 @@ class BackupMonkey(object):
                         src_snapshot=snapshot_id,
                         category='snapshots')
                 except BotoServerError, e:
-                    raise BackupMonkeyException('%s: %s' % (_status.parse_status('snapshot_delete_error', (snapshot_id, snapshot_description)), e.message),
+                    log.error('%s: %s' % (_status.parse_status('snapshot_delete_error', (snapshot_id, snapshot_description)), e.message))
+                    SplunkLogging.write(
                         subject=_status.parse_status('snapshot_delete_error', (snapshot_id, snapshot_description)),
                         body=e.message,
                         src_snapshot=snapshot_id,
-                        category='snapshots')
+                        category='snapshots',
+                        type='alarm',
+                        severity='critical')
         return True
     
 class ErrorFilter(object):
