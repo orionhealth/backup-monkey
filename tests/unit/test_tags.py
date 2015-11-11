@@ -112,3 +112,16 @@ class TagsTest(TestCase):
         ret = self.backup_monkey.get_volumes_to_snapshot()
         assert len(ret) == 4
         assert ret == [a, match_tag_or_1, b, match_tag_or_2]
+
+    @mock.patch('backup_monkey.core.BackupMonkey.get_connection', side_effect=mock_get_connection)
+    def test_remove_reserved_tags(self, mock):
+        volume_tags = {
+            'a': 'a',
+            'b': 'b',
+            'c': 'c',
+            'aws:a': 'aws:a',
+            'aws:b': 'aws:b'
+        }
+        ret = self.backup_monkey.remove_reserved_tags(volume_tags)
+        assert len(ret) == 3
+        assert ret == { 'a': 'a', 'b': 'b', 'c': 'c' }
