@@ -34,7 +34,7 @@ Usage
       --max-snapshots-per-volume SNAPSHOTS
                             the maximum number of snapshots to keep per EBS
                             volume. The oldest snapshots will be deleted. Default:
-                            3
+                            14
       --snapshot-only       Only snapshot EBS volumes, do not remove old snapshots
       --remove-only         Only remove old snapshots, do not create new snapshots
       --verbose, -v         enable verbose output (-vvv for more)
