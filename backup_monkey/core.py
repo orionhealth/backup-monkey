@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import logging, sys, os, re
+import logging, sys, os, re, time
 
 from boto.exception import NoAuthHandlerFound, BotoServerError
 from boto import ec2
@@ -21,7 +21,7 @@ from exception import BackupMonkeyException
 __all__ = ('BackupMonkey', 'Logging')
 log = logging.getLogger(__name__)
 
-from splunk_logging import SplunkLogging  
+from splunk_logging import SplunkLogging
 from status import BackupMonkeyStatus as _status
 
 class BackupMonkey(object):
@@ -39,8 +39,8 @@ class BackupMonkey(object):
 
     def _info(self, **kwargs):
         log.info('%s: %s' % (kwargs['subject'], kwargs['body']) if 'subject' in kwargs and 'body' in kwargs else kwargs['subject'] if 'subject' in kwargs else None)
-        kwargs['severity'] = kwargs['severity'] if 'severity' in kwargs else 'informational' 
-        kwargs['type'] = kwargs['type'] if 'type' in kwargs else 'event' 
+        kwargs['severity'] = kwargs['severity'] if 'severity' in kwargs else 'informational'
+        kwargs['type'] = kwargs['type'] if 'type' in kwargs else 'event'
         kwargs['src_region'] = self._region
         SplunkLogging.write(**kwargs)
 
@@ -49,7 +49,7 @@ class BackupMonkey(object):
         if self._cross_account_number and self._cross_account_role:
             self._info(
                 subject=_status.parse_status('cross_account_connect', (self._cross_account_number, self._cross_account_role, self._region)), 
-                src_account=self._cross_account_number, 
+                src_account=self._cross_account_number,
                 src_role=self._cross_account_role,
                 category='connection')
             from boto.sts import STSConnection
@@ -60,8 +60,8 @@ class BackupMonkey(object):
                 assumed_role = sts.assume_role(role_arn=role_arn, role_session_name='AssumeRoleSession')
                 ret = ec2.connect_to_region(
                     self._region,
-                    aws_access_key_id=assumed_role.credentials.access_key, 
-                    aws_secret_access_key=assumed_role.credentials.secret_key, 
+                    aws_access_key_id=assumed_role.credentials.access_key,
+                    aws_secret_access_key=assumed_role.credentials.secret_key,
                     security_token=assumed_role.credentials.session_token
                 )
             except BotoServerError, e:
@@ -73,7 +73,7 @@ class BackupMonkey(object):
                     category='connection')
         else:
             self._info(
-                subject=_status.parse_status('region_connect', self._region), 
+                subject=_status.parse_status('region_connect', self._region),
                 category='connection')
             try:
                 ret = ec2.connect_to_region(self._region)
@@ -123,7 +123,7 @@ class BackupMonkey(object):
         self._info(
             subject=_status.parse_status('volumes_fetch', self._region), 
             category='volumes')
-        volumes = [] 
+        volumes = []
         if self._reverse_tags:
             filters = self.get_filters()
             black_list = []
@@ -134,24 +134,24 @@ class BackupMonkey(object):
                     black_list.append((f, filters[f]))
             for v in self.get_all_volumes():
                 if len(set(v.tags.items()) - set(black_list)) == len(set(v.tags.items())):
-                    volumes.append(v) 
+                    volumes.append(v)
             return volumes
         else:
             if self._tags:
                 return self.get_all_volumes(filters=self.get_filters())
             else:
                 return self.get_all_volumes()
-    
+
     def remove_reserved_tags(self, tags):
         return dict((key,value) for key, value in tags.iteritems() if not key.startswith('aws:'))
-        
+
     def snapshot_volumes(self):
         ''' Loops through all EBS volumes and creates snapshots of them '''
 
         log.info('Getting list of EBS volumes')
         volumes = self.get_volumes_to_snapshot()
         log.info('Found %d volumes', len(volumes))
-        for volume in volumes:            
+        for volume in volumes:
             description_parts = [self._prefix]
             description_parts.append(volume.id)
             if volume.attach_data.instance_id:
@@ -159,15 +159,20 @@ class BackupMonkey(object):
             if volume.attach_data.device:
                 description_parts.append(volume.attach_data.device)
             description = ' '.join(description_parts)
-            self._info(subject=_status.parse_status('snapshot_create', (volume.id, description)), 
+            self._info(subject=_status.parse_status('snapshot_create', (volume.id, description)),
                 src_volume=volume.id,
                 src_tags=' '.join([':'.join(i) for i in volume.tags.items()]),
                 category='snapshots')
             try:
-                snapshot = volume.create_snapshot(description)
+                snapshot = self._retryInCaseOfException(
+                    volume.create_snapshot, description,
+                    src_volume=volume.id,
+                    category='snapshots',
+                    type='alert',
+                    severity='high')
                 if volume.tags:
                     snapshot.add_tags(self.remove_reserved_tags(volume.tags))
-                self._info(subject=_status.parse_status('snapshot_create_success', (snapshot.id, volume.id)), 
+                self._info(subject=_status.parse_status('snapshot_create_success', (snapshot.id, volume.id)),
                     src_volume=volume.id,
                     src_snapshot=snapshot.id,
                     src_tags=' '.join([':'.join(i) for i in snapshot.tags.items()]),
@@ -215,10 +220,10 @@ class BackupMonkey(object):
             if not snapshot.status == 'completed':
                 log.debug('Skipping %s as it is not a complete snapshot', snapshot.id)
                 continue
-            
+
             log.debug('Found %s: %s', snapshot.id, snapshot.description)
             vol_snap_map.setdefault(snapshot.volume_id, []).append(snapshot)
-            
+
         for volume_id, most_recent_snapshots in vol_snap_map.iteritems():
             most_recent_snapshots.sort(key=lambda s: s.start_time, reverse=True)
             num_snapshots = len(most_recent_snapshots)
@@ -228,13 +233,18 @@ class BackupMonkey(object):
                 snapshot = most_recent_snapshots[i]
                 snapshot_id = snapshot.id
                 snapshot_description = snapshot.description
-                self._info(subject=_status.parse_status('snapshot_delete', (snapshot_id, snapshot_description)), 
+                self._info(subject=_status.parse_status('snapshot_delete', (snapshot_id, snapshot_description)),
                     src_snapshot=snapshot_id,
                     src_volume=volume_id,
                     category='snapshots')
                 try:
-                    snapshot.delete()
-                    self._info(subject=_status.parse_status('snapshot_delete_success', (snapshot_id, snapshot_description)), 
+                    self._retryInCaseOfException(
+                        snapshot.delete,
+                        src_snapshot=snapshot_id,
+                        category='snapshots',
+                        type='alert',
+                        severity='high')
+                    self._info(subject=_status.parse_status('snapshot_delete_success', (snapshot_id, snapshot_description)),
                         src_snapshot=snapshot_id,
                         category='snapshots')
                 except BotoServerError, e:
@@ -247,7 +257,39 @@ class BackupMonkey(object):
                         type='alarm',
                         severity='critical')
         return True
-    
+
+    def _retryInCaseOfException(self, func, *args, **kwargs):
+        '''Retry with sleep in case of RequestLimitExceeded exception'''
+        result = None
+        for attempt in range(1, 6):
+            try:
+                result = func(*args)
+            except BotoServerError, e:
+                sleep_time = attempt + 5
+                log.error("Encountered Error %s on %s, waiting %d seconds then retrying", e.message, str(kwargs), sleep_time)
+                splunk_kwargs = {
+                                    'subject':_status.parse_status('retry_after_sleep', (str(attempt), str(sleep_time))),
+                                    'body':e.message
+                                }
+                splunk_kwargs.update(kwargs)
+                SplunkLogging.write(**splunk_kwargs)
+                time.sleep(sleep_time)
+                continue
+            except Exception, e:
+                log.error("Encountered Error %s on %s", e.message, str(kwargs))
+                raise e
+            else:
+                return result
+        else:
+            log.error("Encountered Error %s on %s, %d retries failed, continuing", e.message, str(kwargs), attempt)
+            splunk_kwargs = {
+                                'subject':_status.parse_status('retry_all_fail', (str(attempt))),
+                                'body':e.message
+                            }
+            splunk_kwargs.update(kwargs)
+            SplunkLogging.write(**splunk_kwargs)
+            raise e
+
 class ErrorFilter(object):
   def filter(self, record):
     return record.levelno >= logging.ERROR
@@ -268,7 +310,7 @@ class Logging(object):
         if handler_filter:
             _handler.addFilter(handler_filter)
         return _handler
-    
+
     def clearLoggingHandlers(self, logger):
         while len(logger.handlers) > 0:
             logger.removeHandler(logger.handlers[0])
@@ -298,4 +340,3 @@ class Logging(object):
             logging.getLogger('boto').setLevel(logging.INFO)
         else:
             logging.getLogger('boto').setLevel(logging.CRITICAL)
-

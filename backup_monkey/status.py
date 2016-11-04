@@ -18,7 +18,9 @@ class BackupMonkeyStatus(object):
     'snapshot_create_error': 'Cannot create snapshot of volume `%s`',
     'snapshot_delete': 'Deleting snapshot `%s` with a description of `%s`',
     'snapshot_delete_success': 'Successfully deleted snapshot `%s` with a description of `%s`',
-    'snapshot_delete_error': 'Cannot delete snapshot `%s` with a description of `%s`'
+    'snapshot_delete_error': 'Cannot delete snapshot `%s` with a description of `%s`',
+    'retry_after_sleep': '`%s` attmpts fails and waiting `%s` seconds then retry',
+    'retry_all_fail': 'Total `%s` retries fail and give up'
   }
 
   @staticmethod
