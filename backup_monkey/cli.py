@@ -31,7 +31,7 @@ def _fail(message="Unknown failure", code=1):
 
 def run():
     parser = argparse.ArgumentParser(description='Loops through all EBS volumes, and snapshots them, then loops through all snapshots, and removes the oldest ones.')
-    parser.add_argument('--region', metavar='REGION', 
+    parser.add_argument('--region', metavar='REGION',
                         help='the region to loop through and snapshot (default is current region of EC2 instance this is running on). E.g. us-east-1')
     parser.add_argument('--max-snapshots-per-volume', metavar='SNAPSHOTS', default=14, type=int,
                         help='the maximum number of snapshots to keep per EBS volume. The oldest snapshots will be deleted. Default: 3')
@@ -39,11 +39,11 @@ def run():
                         help='Only snapshot EBS volumes, do not remove old snapshots')
     parser.add_argument('--remove-only', action='store_true', default=False,
                         help='Only remove old snapshots, do not create new snapshots')
-    parser.add_argument('--verbose', '-v', action='count', 
+    parser.add_argument('--verbose', '-v', action='count',
                         help='enable verbose output (-vvv for more)')
     parser.add_argument('--version', action='version', version='%(prog)s ' + __version__,
                         help='display version number and exit')
-    parser.add_argument('--tags', nargs="+", 
+    parser.add_argument('--tags', nargs="+",
                         help='Only snapshot instances that match passed in tags. E.g. --tag Name:foo will snapshot all instances with a tag `Name` and value is `foo`')
     parser.add_argument('--reverse-tags', action='store_true', default=False,
                         help='Do a reverse match on the passed in tags. E.g. --tag Name:foo --reverse-tags will snapshot all instances that do not have a `Name` tag with the value `foo`')
@@ -77,20 +77,21 @@ def run():
         log.debug('Instance meta-data: %s', instance_metadata)
         if not instance_metadata:
             _fail('Could not determine region. This script is either not running on an EC2 instance (in which case you should use the --region option), or the meta-data service is down')
-        
+
         region = instance_metadata['placement']['availability-zone'][:-1]
         log.debug("Running in region: %s", region)
 
     try:
-        monkey = BackupMonkey(region, args.max_snapshots_per_volume, args.tags, args.reverse_tags, args.cross_account_number, args.cross_account_role, args.verbose)
-        
+        monkey = BackupMonkey(region, args.max_snapshots_per_volume, args.tags, args.reverse_tags, args.cross_account_number,
+            args.cross_account_role, args.verbose)
+
         if not args.remove_only:
             monkey.snapshot_volumes()
         if not args.snapshot_only:
             monkey.remove_old_snapshots()
-        
+
     except BackupMonkeyException as e:
         _fail(str(e))
-    
+
     log.info('Backup Monkey completed successfully!')
     sys.exit(0)
