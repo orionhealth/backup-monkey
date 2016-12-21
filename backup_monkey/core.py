@@ -15,6 +15,7 @@ import logging, sys, os, re, time
 
 from boto.exception import NoAuthHandlerFound, BotoServerError
 from boto import ec2
+from datetime import datetime
 
 from exception import BackupMonkeyException
 
@@ -121,7 +122,7 @@ class BackupMonkey(object):
     def get_volumes_to_snapshot(self):
         ''' Returns volumes to snapshot based on passed in tags '''
         self._info(
-            subject=_status.parse_status('volumes_fetch', self._region), 
+            subject=_status.parse_status('volumes_fetch', self._region),
             category='volumes')
         volumes = []
         if self._reverse_tags:
@@ -170,8 +171,12 @@ class BackupMonkey(object):
                     category='snapshots',
                     type='alert',
                     severity='high')
+
+                snapshot_tags = {}
                 if volume.tags:
-                    snapshot.add_tags(self.remove_reserved_tags(volume.tags))
+                    snapshot_tags = self.remove_reserved_tags(volume.tags)
+                snapshot_tags.update({'snap_create_time': str(datetime.today().date())})
+                snapshot.add_tags(snapshot_tags)
                 self._info(subject=_status.parse_status('snapshot_create_success', (snapshot.id, volume.id)),
                     src_volume=volume.id,
                     src_snapshot=snapshot.id,
